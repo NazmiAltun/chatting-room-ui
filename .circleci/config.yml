@@ -1,0 +1,70 @@
+# Javascript Node CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-javascript/ for more details
+#
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/node:8
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "package.json" }}
+          - v1-dependencies-
+
+      - run: yarn
+
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "package.json" }}
+
+      - run:
+          name: Install AWS CLI
+          working_directory: ~
+          command: |
+            sudo apt-get -y -qq update
+            sudo apt-get -y -qq install python3.4-dev
+            curl -O https://bootstrap.pypa.io/get-pip.py
+            sudo python3.4 get-pip.py
+            sudo pip install awscli --upgrade
+      - run:
+          name: Install ecs-deploy
+          command: sudo npm install -g ecs-deploy
+
+      - run:
+          name: Running unit tests
+          command: yarn test --ci --testResultsProcessor="jest-junit"
+          environment:
+            JEST_JUNIT_OUTPUT: "test-results/Jest/js-test-results.xml"
+
+      - store_test_results:
+          path: test-results
+
+      - run:
+          name: Build
+          command: yarn clean && yarn build
+
+      - setup_remote_docker
+
+      - run:
+          name: Build Docker Image
+          command: docker build -t $AWS_ECR_URI:$CIRCLE_SHA1 -f production.Dockerfile .
+
+      - run:
+          name: Deploy ECR
+          command: |
+            mkdir ~/.aws && echo -e "[default]\naws_access_key_id=$AWS_ACCESS_KEY_ID\naws_secret_access_key=$AWS_SECRET_ACCESS_KEY\n" > ~/.aws/credentials
+            DOCKER_LOGIN=`aws ecr get-login --no-include-email --region us-east-1` && $DOCKER_LOGIN
+            docker push $AWS_ECR_URI:$CIRCLE_SHA1
+
+      - run:
+          name: Deploy Image
+          command: REGION=us-east-1 CLUSTER=js-workshop SERVICE=js-workshop-nazmi-api CONTAINER=app IMAGE=$AWS_ECR_URI IMAGE_TAG=$CIRCLE_SHA1 ecs-deploy
+
+
