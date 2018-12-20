@@ -8,7 +8,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "nodemon",
-    "start": "NODE_ENV=production node dist/server/index.js",
+    "start": "SET NODE_ENV=production & node dist/server/index.js",
     "lint": "tslint -p . -c tslint.json",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,css,json,md}\"",
     "test": "jest",
